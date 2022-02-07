@@ -19,8 +19,6 @@ set( ECBUILD_FIND_MPI ON )
 set( OpenMP_C_FLAGS             "-mp -mp=bind,allcores,numa" )
 set( OpenMP_CXX_FLAGS           "-mp -mp=bind,allcores,numa" )
 set( OpenMP_Fortran_FLAGS       "-mp -mp=bind,allcores,numa" )
-#set( OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS} -mp=gpu -ta=tesla:lineinfo,fastmath" )
-#set( OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS} -Minfo" )
 
 ####################################################################
 # OpenAcc FLAGS
@@ -28,7 +26,7 @@ set( OpenMP_Fortran_FLAGS       "-mp -mp=bind,allcores,numa" )
 
 #set( OpenACC_Fortran_FLAGS "-acc -ta=tesla:lineinfo,deepcopy,fastmath" )
 #set( OpenACC_Fortran_FLAGS "-mp=gpu -ta=tesla:lineinfo,fastmath" )
-set( OpenACC_Fortran_FLAGS "-mp=gpu -gpu=cc70,fastmath,lineinfo" )
+set( OpenACC_Fortran_FLAGS "-acc -mp=gpu -gpu=cc70,fastmath,lineinfo" )
 # Enable this to get more detailed compiler output
 # set( OpenACC_Fortran_FLAGS "${OpenACC_Fortran_FLAGS} -Minfo" )
 
