@@ -22,10 +22,13 @@ list(APPEND CLOUDSC_COMMON_SOURCES
   module/timer_mod.F90
   module/mycpu.c
   module/ec_pmon_mod.F90
+  module/oml_mod.F90
   module/file_io_mod.F90
   module/expand_mod.F90
   module/validate_mod.F90
+  module/field_module.F90
   module/cloudsc_global_state_mod.F90
+  module/cloudsc_field_state_mod.F90
   module/cloudsc_mpi_mod.F90
 )
 

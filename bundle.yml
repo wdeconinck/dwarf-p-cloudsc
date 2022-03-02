@@ -56,6 +56,7 @@ options :
             ENABLE_CLOUDSC_GPU_CLAW=ON
             ENABLE_CLOUDSC_GPU_SCC=ON
             ENABLE_CLOUDSC_GPU_SCC_HOIST=ON
+            ENABLE_CLOUDSC_GPU_SCC_FIELD=ON
 
     - with-mpi :
         help  : Enable MPI-parallel kernel
