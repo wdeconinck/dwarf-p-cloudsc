@@ -24,9 +24,7 @@ set( OpenMP_Fortran_FLAGS       "-mp -mp=bind,allcores,numa" )
 # OpenAcc FLAGS
 ####################################################################
 
-set( OpenACC_Fortran_FLAGS "-acc -ta=tesla:lineinfo,deepcopy,fastmath" )
-# Enable this to get more detailed compiler output
-# set( OpenACC_Fortran_FLAGS "${OpenACC_Fortran_FLAGS} -Minfo" )
+set( OpenACC_Fortran_FLAGS "-acc -cuda -gpu=deepcopy,fastmath" )
 
 ####################################################################
 # COMMON FLAGS
@@ -40,6 +38,8 @@ set(ECBUILD_Fortran_FLAGS "${ECBUILD_Fortran_FLAGS} -Mrecursive")
 set(ECBUILD_Fortran_FLAGS "${ECBUILD_Fortran_FLAGS} -Ktrap=fp")
 set(ECBUILD_Fortran_FLAGS "${ECBUILD_Fortran_FLAGS} -Kieee")
 set(ECBUILD_Fortran_FLAGS "${ECBUILD_Fortran_FLAGS} -Mdaz")
+
+# set(ECBUILD_Fortran_LINK_FLAGS "-gpu=pinned")
 
 set( ECBUILD_Fortran_FLAGS_BIT "-O2 -gopt" )
 
