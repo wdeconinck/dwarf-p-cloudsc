@@ -123,7 +123,8 @@ CONTAINS
     FIELD_PTR = FIELD_3D(SHAPE=SHAPE, NBLOCKS=NBLOCKS, PERSISTENT=.TRUE.)
     ! Due to Fortran's reallocation-on-assignment behaviour, the
     ! FIELD_PTR%PTR pointer needs updating here for owned objects.
-    IF (FIELD_PTR%OWNED) FIELD_PTR%PTR => FIELD_PTR%DATA
+    !!! Following does however not seem required... ?
+    !!! CALL FIELD_PTR%ATLAS_FIELD%DATA(FIELD_PTR%PTR)
 
     IF (PRESENT(ZERO)) THEN
       IF (ZERO) THEN

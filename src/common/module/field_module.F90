@@ -18,6 +18,7 @@ MODULE FIELD_MODULE
 USE PARKIND1, ONLY: JPIM, JPRB
 USE OML_MOD, ONLY: OML_MAX_THREADS, OML_MY_THREAD
 USE IEEE_ARITHMETIC, ONLY: IEEE_SIGNALING_NAN
+USE ATLAS_MODULE, ONLY : ATLAS_FIELD, ATLAS_REAL
 
 IMPLICIT NONE
 
@@ -98,7 +99,7 @@ TYPE FIELD_3D
 
   ! TODO: Atlas-based field data storage field
   ! TODO: Do we still need to use pointers here?
-  ! TYPE(ATLAS_FIELD), POINTER :: DATA
+  TYPE(ATLAS_FIELD), POINTER :: ATLAS_FIELD
 
   ! Storage pointer for non-Atlas backward-compatibility mode
   !
@@ -106,7 +107,6 @@ TYPE FIELD_3D
   ! where the innermost dimension represents the horizontal and
   ! the outermost one is the block index.
   REAL(KIND=JPRB), POINTER :: PTR(:,:,:) => NULL()
-  REAL(KIND=JPRB), ALLOCATABLE :: DATA(:,:,:)
 
   ! For wrapping discontiguous fields in co-allocated storage
   ! arrays (eg. GFL/GMV) also store a CONTIGUOUS base pointer
@@ -658,7 +658,9 @@ CONTAINS
     TYPE(FIELD_3D), TARGET :: SELF
     REAL(KIND=JPRB), TARGET, INTENT(IN) :: DATA(:,:,:)
 
-    SELF%PTR => DATA
+    ALLOCATE(SELF%ATLAS_FIELD)
+    SELF%ATLAS_FIELD = ATLAS_FIELD(DATA(:,:,:))
+    CALL SELF%ATLAS_FIELD%DATA(SELF%PTR)
     SELF%ACTIVE = .TRUE.
     SELF%THREAD_BUFFER = .FALSE.
     SELF%OWNED = .FALSE.
@@ -732,7 +734,9 @@ CONTAINS
     REAL(KIND=JPRB), TARGET, INTENT(IN) :: DATA(:,:,:,:)
     INTEGER(KIND=JPIM), INTENT(IN) :: IDX
 
-    SELF%PTR => DATA(:,:,IDX,:)
+    ALLOCATE(SELF%ATLAS_FIELD)
+    SELF%ATLAS_FIELD = ATLAS_FIELD(DATA(:,:,IDX,:))
+    CALL SELF%ATLAS_FIELD%DATA(SELF%PTR)
     SELF%ACTIVE = .TRUE.
     SELF%THREAD_BUFFER = .FALSE.
     SELF%OWNED = .FALSE.
@@ -848,11 +852,13 @@ CONTAINS
     END IF
 
     ! Allocate storage array and store metadata
-    ALLOCATE(SELF%DATA(SHAPE(1),SHAPE(2),NBLK))
-    SELF%PTR => SELF%DATA
+    ALLOCATE(SELF%ATLAS_FIELD)
+    SELF%ATLAS_FIELD = ATLAS_FIELD(KIND=ATLAS_REAL(JPRB), SHAPE=[SHAPE(1),SHAPE(2),NBLK])
+    CALL SELF%ATLAS_FIELD%DATA(SELF%PTR)
+
     SELF%ACTIVE = .TRUE.
     SELF%OWNED = .TRUE.
-    SELF%NBLOCKS = SIZE(SELF%DATA, 3)
+    SELF%NBLOCKS = NBLK
     SELF%BASE_PTR => NULL()
     SELF%FIDX = -1
   END FUNCTION FIELD_3D_ALLOCATE
@@ -988,8 +994,9 @@ CONTAINS
     ALLOCATE(NEWOBJ)
     ! For owned storage data, re-allocate but do not copy data over
     IF (SELF%OWNED) THEN
-      ALLOCATE(NEWOBJ%DATA, MOLD=SELF%DATA)
-      NEWOBJ%PTR => NEWOBJ%DATA
+      ALLOCATE(NEWOBJ%ATLAS_FIELD)
+      NEWOBJ%ATLAS_FIELD = ATLAS_FIELD(KIND=SELF%ATLAS_FIELD%KIND(), SHAPE=SELF%ATLAS_FIELD%SHAPE())
+      CALL NEWOBJ%ATLAS_FIELD%DATA(NEWOBJ%PTR)
     ELSE
       NEWOBJ%PTR => SELF%PTR
     END IF
@@ -1097,7 +1104,7 @@ CONTAINS
     IDX = BLOCK_INDEX
     IF (SELF%THREAD_BUFFER) IDX = OML_MY_THREAD()
     IF (SELF%ACTIVE .AND. SELF%OWNED) THEN
-      SELF%VIEW => SELF%DATA(:,:,IDX)
+      SELF%VIEW => SELF%PTR(:,:,IDX)
     ELSEIF (SELF%ACTIVE .AND. .NOT. SELF%OWNED) THEN
       SELF%VIEW => SELF%PTR(:,:,IDX)
     END IF
@@ -1232,7 +1239,7 @@ CONTAINS
     IDX = BLOCK_INDEX
     IF (SELF%THREAD_BUFFER) IDX = OML_MY_THREAD()
     IF (SELF%ACTIVE .AND. SELF%OWNED) THEN
-      VIEW_PTR => SELF%DATA(:,:,IDX)
+      VIEW_PTR => SELF%PTR(:,:,IDX)
     ELSEIF (SELF%ACTIVE .AND. .NOT. SELF%OWNED) THEN
       VIEW_PTR => SELF%PTR(:,:,IDX)
     ELSE
@@ -1378,9 +1385,7 @@ CONTAINS
 
     IDX = BLOCK_INDEX
     IF (SELF%THREAD_BUFFER) IDX = OML_MY_THREAD()
-    IF (SELF%ACTIVE .AND. SELF%OWNED) THEN
-      VIEW_PTR => SELF%DATA(:,:,IDX)
-    ELSEIF (SELF%ACTIVE .AND. .NOT. SELF%OWNED) THEN
+    IF (SELF%ACTIVE) THEN
       VIEW_PTR => SELF%PTR(:,:,IDX)
     ELSE
       VIEW_PTR => SELF%VIEW  ! Set to NaN'd field buffer
@@ -1506,9 +1511,15 @@ CONTAINS
     ! Initialize a copy of this field on GPU device
     CLASS(FIELD_3D), TARGET :: SELF
 
-    SELF%DEVPTR => SELF%DATA
-    !$acc enter data create(SELF%DATA)
+    CALL SELF%ATLAS_FIELD%ALLOCATE_DEVICE()
+    CALL SELF%ATLAS_FIELD%DATA(SELF%DEVPTR)
     SELF%ON_DEVICE = .TRUE.
+    CALL SELF%ATLAS_FIELD%SET_DEVICE_NEEDS_UPDATE(.FALSE.)
+    CALL SELF%ATLAS_FIELD%SET_HOST_NEEDS_UPDATE(.TRUE.)
+      ! Equivalent to SELF%ON_DEVICE=.TRUE.
+      ! Note that SELF%ON_DEVICE will make ENSURE_DEVICE skip the update,
+      ! meaning it is expected that first use will be on device.
+      ! Double check with Michael Lange if that is intended.
   END SUBROUTINE FIELD_3D_CREATE_DEVICE
 
   SUBROUTINE FIELD_4D_CREATE_DEVICE(SELF)
@@ -1564,7 +1575,9 @@ CONTAINS
     END IF
 
     IF (SELF%OWNED) THEN
-      DEVPTR => SELF%DATA
+      CALL SELF%ATLAS_FIELD%DATA(DEVPTR)
+        ! DEVPTR == SELF%DEVPTR == SELF%PTR
+        ! because in this case internal data is contiguous and ACC_MAPPED
     ELSE
       DEVPTR => SELF%DEVPTR
     END IF
@@ -1647,12 +1660,12 @@ CONTAINS
     INTEGER(KIND=JPIM) :: IBL
 
     IF (SELF%OWNED) THEN
-      !$acc enter data create(SELF%DATA)
-      DO IBL=1, SELF%NBLOCKS
-        !$acc update device(SELF%DATA(:,:,IBL))
-      END DO
-      !$acc wait
-      SELF%DEVPTR => SELF%DATA
+      CALL SELF%ATLAS_FIELD%ALLOCATE_DEVICE()
+      CALL SELF%ATLAS_FIELD%UPDATE_DEVICE()
+      CALL SELF%ATLAS_FIELD%SET_DEVICE_NEEDS_UPDATE(.FALSE.) ! Redundant, done in previous statement.
+      CALL SELF%ATLAS_FIELD%DATA(SELF%DEVPTR)
+        ! - SELF%DEVPTR is ACC_MAPPED if Atlas was compiled with OpenACC + GridTools + CUDA
+        ! - SELF%DEVPTR should match SELF%PTR (contiguous owned data in this IF)
     ELSE
       ALLOCATE(SELF%DEVPTR, SOURCE=SELF%PTR)
       !$acc enter data create(SELF%DEVPTR)
@@ -1662,6 +1675,8 @@ CONTAINS
       !$acc wait
     END IF
     SELF%ON_DEVICE = .TRUE.
+    CALL SELF%ATLAS_FIELD%SET_HOST_NEEDS_UPDATE(.TRUE.)
+      ! Intention of this use case? Double check with Michael Lange
   END SUBROUTINE FIELD_3D_UPDATE_DEVICE
 
   SUBROUTINE FIELD_4D_UPDATE_DEVICE(SELF)
@@ -1762,11 +1777,9 @@ CONTAINS
     INTEGER(KIND=JPIM) :: IBL
 
     IF (SELF%OWNED) THEN
-      DO IBL=1, SELF%NBLOCKS
-        !$acc update host(SELF%DATA(:,:,IBL))
-      END DO
-      !$acc wait
-      !$acc exit data delete(SELF%DATA)
+      CALL SELF%ATLAS_FIELD%UPDATE_HOST()
+      CALL SELF%ATLAS_FIELD%SET_HOST_NEEDS_UPDATE(.FALSE.) ! Redundant, done in previous statement.
+      CALL SELF%ATLAS_FIELD%DEALLOCATE_DEVICE()
     ELSE
       DO IBL=1, SELF%NBLOCKS
         !$acc update host(SELF%DEVPTR(:,:,IBL))
@@ -1865,10 +1878,11 @@ CONTAINS
     ! Initialize a copy of this field on GPU device
     CLASS(FIELD_3D), TARGET :: SELF
 
-    !$acc exit data delete(SELF%DEVPTR)
     IF (SELF%OWNED) THEN
+      CALL SELF%ATLAS_FIELD%DEALLOCATE_DEVICE()
       NULLIFY(SELF%DEVPTR)
     ELSE
+      !$acc exit data delete(SELF%DEVPTR)
       DEALLOCATE(SELF%DEVPTR)
     END IF
     SELF%ON_DEVICE = .FALSE.
@@ -2016,8 +2030,9 @@ CONTAINS
   SUBROUTINE FIELD_3D_FINAL(SELF)
     ! Finalizes field and dealloactes owned data
     CLASS(FIELD_3D) :: SELF
-    IF (SELF%OWNED) THEN
-      DEALLOCATE(SELF%DATA)
+    IF (ASSOCIATED(SELF%ATLAS_FIELD)) THEN
+      CALL SELF%ATLAS_FIELD%FINAL()
+      DEALLOCATE(SELF%ATLAS_FIELD)
     END IF
     NULLIFY(SELF%PTR)
     NULLIFY(SELF%VIEW)
