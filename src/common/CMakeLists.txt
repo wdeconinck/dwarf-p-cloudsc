@@ -65,6 +65,9 @@ if( TARGET Serialbox::Serialbox_Fortran )
   target_link_libraries( cloudsc-common-lib PRIVATE Serialbox::Serialbox_Fortran )
 endif()
 
+if( TARGET atlas_f )
+  target_link_libraries( cloudsc-common-lib PUBLIC atlas_f )
+endif()
 
 if( HAVE_ACC )
   # ========================================================================
@@ -106,5 +109,9 @@ if( HAVE_ACC )
 
   if( TARGET Serialbox::Serialbox_Fortran )
     target_link_libraries( cloudsc-common-lib-static PRIVATE Serialbox::Serialbox_Fortran )
+  endif()
+
+  if( TARGET atlas_f )
+    target_link_libraries( cloudsc-common-lib-static PUBLIC atlas_f )
   endif()
 endif()

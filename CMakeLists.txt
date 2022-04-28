@@ -97,6 +97,9 @@ if( HAVE_SINGLE_PRECISION )
     list(APPEND CLOUDSC_DEFINITIONS SINGLE)
 endif()
 
+# Atlas
+ecbuild_find_package( atlas )
+
 # build executables
 add_subdirectory(src)
 

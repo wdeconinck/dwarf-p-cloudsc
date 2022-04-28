@@ -5,6 +5,7 @@ name    : cloudsc-bundle
 version : 1.0.0-develop
 cmake : >
         CMAKE_LINK_DEPENDS_NO_SHARED=ON
+        ENABLE_OMP=ON
 
 projects :
 
@@ -33,6 +34,30 @@ projects :
         cmake   : >
             LOKI_ENABLE_TESTS=OFF
             LOKI_ENABLE_NO_INSTALL=ON
+
+    - eckit :
+        git     : https://github.com/ecmwf/eckit
+        version : master
+        optional: true
+        require : ecbuild
+        cmake   : >
+                  ENABLE_VIENNACL=OFF ENABLE_ARMADILLO=OFF
+                  ENABLE_ECKIT_CMD=OFF ENABLE_ECKIT_ECML=OFF
+                  ENABLE_CUDA=OFF
+
+    - fckit :
+        git     : https://github.com/ecmwf/fckit
+        version : master
+        optional: true
+        require : ecbuild eckit
+
+    - atlas :
+        git     : https://github.com/ecmwf/atlas
+        version : master
+        optional: true
+        require : ecbuild eckit fckit
+        cmake   : >
+                  ENABLE_TESSELATION=OFF ENABLE_TRANS=OFF
 
     - cloudsc-dwarf :
         # The CLOUDSC dwarf project with multiple implementations
@@ -67,6 +92,11 @@ options :
         cmake : >
             ENABLE_CLOUDSC_LOKI=ON
             LOKI_ENABLE_NO_INSTALL=OFF
+
+    - omp :
+        help  : Enable OpenMP [ON|OFF]
+        cmake : ENABLE_OMP={{value}
+
 
     - without-loki-install :
         help  : Skip installation of Loki (Requires Loki to be on the PATH)
