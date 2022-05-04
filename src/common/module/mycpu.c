@@ -11,6 +11,7 @@
 #if defined(__APPLE__)
 static int sched_getcpu() { return 0; }
 #else
+#define _GNU_SOURCE
 #include <sched.h>
 #endif
 
